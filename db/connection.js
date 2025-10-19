@@ -7,7 +7,7 @@ require("dotenv").config({
 
 const config = {};
 
-if (ENV === "production" && process.env.DTATBASE_URL) {
+if (ENV === "production" && process.env.DATABASE_URL) {
   config.connectionString = process.env.DATABASE_URL;
   config.max = 2;
   config.ssl = { rejectUnauthorized: false }
