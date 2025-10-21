@@ -1,13 +1,15 @@
 const { google } = require("googleapis");
+const jwt = require("jsonwebtoken");
+
 
 const {
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
-  GOOGLE_REDIRECT_URI
+  GOOGLE_REDIRECT_URI,
+  JWT_EXPIRES_IN,
+  JWT_SECRET
 } = process.env;
-const { JWT_SECRET = "superlongrandomsecretdontcommit" } = process.env;
 
-const jwt = require("jsonwebtoken");
 
 
 // Scopes: calendar events read/write
@@ -35,12 +37,15 @@ function generateAuthUrl(state) {
 
 // auth state
 
-function signOAuthState(user) {
-  return jwt.sign(
-    { sub: user.id, purpose: "google_oauth" },
-    JWT_SECRET,
-    { expiresIn: "10m" } 
-  );
+function signOAuthState(user, patch = {}) {
+
+  const payload = {
+    purpose: "google_oauth",
+    sub: user.id,             // who is authenticating
+    ...patch,                 // add eventId, next, action, etc.
+  };
+
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
 
 // Verify the state token and return payload (contains sub = user id)

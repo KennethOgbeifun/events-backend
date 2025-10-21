@@ -70,30 +70,6 @@ function postSignup(req, res, next) {
     .then(({ signup, event }) => {
       if (!event) return res.status(201).send({ signup });
 
-      
-      return findTokensByUserId(userId)
-        .then((tokens) => {
-          if (!tokens) return { signup, inserted: null }; 
-
-          
-          const calEvent = {
-            summary: event.title,
-            description: event.description || "",
-            location: event.location || "",
-            start: { dateTime: new Date(event.start_time).toISOString() },
-            end:   { dateTime: new Date(event.end_time).toISOString() },
-          };
-
-          return addEventToCalendar(tokens, calEvent)
-            .then((inserted) => ({ signup, inserted }))
-            .catch((err) => {
-              console.error("Calendar insert failed:", err.message);
-              return { signup, inserted: null };
-            });
-        })
-        .then(({ signup, inserted }) => {
-          res.status(201).send({ signup, calendar: inserted || undefined });
-        });
     })
     .catch(next);
 }
@@ -103,6 +79,50 @@ function getSignups(req, res, next) {
     .then((signups) => res.status(200).send({ signups }))
     .catch(next);
 }
+
+function addEventToMyCalendar(req,res,next) {
+    const eventId = req.params.id;
+    const userId = req.user.id;
+
+    findTokensByUserId(userId)
+    .then((tokens) => {
+      if (!tokens) {
+        const err = new Error("Google not connected");
+        err.status = 400;
+        throw err;
+      }
+      return db
+        .query(
+          `SELECT title, description, start_time, end_time, location
+           FROM events
+           WHERE id = $1`,
+          [eventId]
+        )
+        .then(({ rows }) => {
+          const event = rows[0];
+          if (!event) {
+            const err = new Error("Event not found");
+            err.status = 404;
+            throw err;
+          }
+
+          const calEvent = {
+            summary: event.title,
+            description: event.description || "",
+            location: event.location || "",
+            start: { dateTime: new Date(event.start_time).toISOString() },
+            end:   { dateTime: new Date(event.end_time).toISOString() },
+          };
+          return addEventToCalendar(tokens, calEvent);
+        });
+    })
+    .then((inserted) => {
+      res.status(201).send({ calendar: inserted });
+    })
+    .catch(next);
+
+
+  }
 
 
 
@@ -192,7 +212,12 @@ function login(req, res, next) {
 // Requires auth
 function initGoogle(req, res) {
   // req.user set by requireAuth
-  const state = signOAuthState(req.user);
+  const { eventId, next } = req.query;   
+
+  const state = signOAuthState(req.user, {
+    eventId: eventId ? Number(eventId) : undefined,
+    next: next || undefined,
+  });  
   const url = generateAuthUrl(state);
  
   res.status(200).send({ authUrl: url });
@@ -203,20 +228,51 @@ function googleCallback(req, res, next) {
   const {code, state} = req.query;
   if (!code || !state) return res.status(400).send({ msg: "Missing code/state" });
 
-  let userId;
+  let payload;
   try {
-    const payload = verifyOAuthState(state);
-    userId = payload.sub; // recovered user id
+    payload = verifyOAuthState(state); // { purpose, sub, eventId?, next? }
   } catch {
     return res.status(400).send({ msg: "Invalid state" });
   }
 
+  const userId   = payload.sub;
+  const eventId  = payload.eventId ? Number(payload.eventId) : null;
+  const nextPath = payload.next || "/integrations/google/success";
+
   const client = createOAuthClient();
 
-  // exchange code for tokens
   client.getToken(code)
-    .then(({ tokens }) => upsertTokens(userId, tokens))
-    .then(() => res.redirect(`${FRONTEND_BASE_URL}/integrations/google/success`))
+    // store tokens, then forward the raw tokens
+    .then(({ tokens }) => upsertTokens(userId, tokens).then(() => tokens))
+    // if eventId present, add it to calendar right now
+    .then((tokens) => {
+      if (!eventId) return null;
+
+      return db.query(
+        `SELECT title, description, start_time, end_time, location
+         FROM events WHERE id = $1`,
+        [eventId]
+      )
+      .then(({ rows }) => rows[0] || null)
+      .then((event) => {
+        if (!event) return null;
+        const calEvent = {
+          summary: event.title,
+          description: event.description || "",
+          location: event.location || "",
+          start: { dateTime: new Date(event.start_time).toISOString() },
+          end:   { dateTime: new Date(event.end_time).toISOString() },
+        };
+        return addEventToCalendar(tokens, calEvent)
+          .catch((e) => {
+            console.error("Calendar insert after OAuth failed:", e.message);
+            return null;
+          });
+      });
+    })
+    .then(() => {
+      res.redirect(`${FRONTEND_BASE_URL}${nextPath}${nextPath.includes("?") ? "&" : "?"}calendar=added`);
+    })
     .catch(next);
 }
 
@@ -263,6 +319,17 @@ function listEvents(req, res, next) {
     .catch(next);
 };
 
+function googleStatus(req, res, next) {
+  const userId = req.user.id;
+  findTokensByUserId(userId)
+    .then((tokens) => {
+      const connected = !!(tokens && (tokens.refresh_token || tokens.access_token));
+      res.status(200).send({ connected });
+    })
+    .catch(next);
+}
+
+
 function listSignupIds(req, res, next) {
   return db
     .query(
@@ -291,4 +358,6 @@ module.exports = {
   googleCallback,
   listEvents, 
   listSignupIds,
+  addEventToMyCalendar,
+  googleStatus
 };

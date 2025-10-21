@@ -3,7 +3,7 @@ const cors = require("cors");
 const {
   register, login, listEvents, listSignupIds,
   getHealth, getEvents, getEventById, postEvent, patchEvent, removeEvent,
-  postSignup, getSignups, initGoogle, googleCallback
+  postSignup, getSignups, initGoogle, googleCallback, addEventToMyCalendar, googleStatus
 } = require("./controllers/controller");
 const { requireAuth, requireStaff } = require("./utils/auth");
 
@@ -29,6 +29,11 @@ app.delete("/api/events/:id", requireAuth, requireStaff, removeEvent);
 // signups
 app.post("/api/events/:id/signups", requireAuth, postSignup);
 app.get("/api/events/:id/signups", requireAuth, requireStaff, getSignups);
+
+//calendar
+app.post("/api/events/:id/calendar", requireAuth, addEventToMyCalendar);
+app.get("/api/integrations/google/status", requireAuth, googleStatus);
+
 
 
 app.get("/api/signups/me", requireAuth, listSignupIds);
