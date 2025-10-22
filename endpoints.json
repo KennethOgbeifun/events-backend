@@ -1,0 +1,286 @@
+{
+  "name": "Events Platform API",
+  "description": "Node/Express REST API for events with JWT auth and Google Calendar integration.",
+  "endpoints": [
+    {
+      "group": "Health",
+      "name": "Healthcheck",
+      "method": "GET",
+      "path": "/api/health",
+      "authRequired": false,
+      "query": [],
+      "body": null,
+      "responses": {
+        "200": { "ok": true, "uptime": 123.45 }
+      }
+    },
+    {
+      "group": "Auth",
+      "name": "Register",
+      "method": "POST",
+      "path": "/api/auth/register",
+      "authRequired": false,
+      "body": {
+        "email": "user@example.com",
+        "name": "User Name",
+        "password": "password123",
+        "is_staff": false
+      },
+      "responses": {
+        "201": {
+          "user": { "id": 2, "email": "user@example.com", "name": "User Name", "is_staff": false },
+          "token": "kjdhkdvzjhKJDBKJBs..."
+        },
+        "400": { "msg": "email, name, and password are required" },
+        "409": { "msg": "Email already registered" }
+      }
+    },
+    {
+      "group": "Auth",
+      "name": "Login",
+      "method": "POST",
+      "path": "/api/auth/login",
+      "authRequired": false,
+      "body": {
+        "email": "user@example.com",
+        "password": "password123"
+      },
+      "responses": {
+        "200": {
+          "user": { "id": 2, "email": "user@example.com", "name": "User Name", "is_staff": false },
+          "token": "kjdhkdvzjhKJDBKJBs..."
+        },
+        "400": { "msg": "email and password are required" },
+        "401": { "msg": "Invalid credentials" }
+      }
+    },
+    {
+      "group": "Events",
+      "name": "List Events",
+      "method": "GET",
+      "path": "/api/events",
+      "authRequired": false,
+      "query": [
+        { "name": "q", "type": "string", "required": false, "desc": "Search title/description/location (ILIKE)" },
+        { "name": "category", "type": "string", "required": false, "desc": "MUSIC | SPORT | ARTS | FAMILY | CITIES" },
+        { "name": "location", "type": "string", "required": false },
+        { "name": "start", "type": "string", "required": false, "desc": "ISO date/datetime (>= start_time)" },
+        { "name": "end", "type": "string", "required": false, "desc": "ISO date/datetime (<= end_time)" },
+        { "name": "page", "type": "number", "required": false, "default": 1 },
+        { "name": "limit", "type": "number", "required": false, "default": 12, "max": 200 },
+        { "name": "include", "type": "string", "required": false, "desc": "counts → adds signup_count" }
+      ],
+      "responses": {
+        "200": {
+          "events": [
+            {
+              "id": 1,
+              "title": "Park Clean-up",
+              "description": "Join us...",
+              "location": "Riverside Park",
+              "start_time": "2025-10-23T08:50:54.000Z",
+              "end_time": "2025-10-23T10:50:54.000Z",
+              "price_type": "FREE",
+              "price_cents": null,
+              "category": "MUSIC",
+              "created_by": 1,
+              "signup_count": 3
+            }
+          ],
+          "page": 1
+        }
+      }
+    },
+    {
+      "group": "Events",
+      "name": "Get Event by ID",
+      "method": "GET",
+      "path": "/api/events/:id",
+      "authRequired": false,
+      "params": [{ "name": "id", "type": "number" }],
+      "responses": {
+        "200": {
+          "event": {
+            "id": 1,
+            "title": "Park Clean-up",
+            "description": "Join us...",
+            "location": "Riverside Park",
+            "start_time": "2025-10-23T08:50:54.000Z",
+            "end_time": "2025-10-23T10:50:54.000Z",
+            "price_type": "FREE",
+            "price_cents": null,
+            "category": "MUSIC",
+            "created_by": 1
+          }
+        },
+        "404": { "msg": "Event not found" }
+      }
+    },
+    {
+      "group": "Events (staff)",
+      "name": "Create Event",
+      "method": "POST",
+      "path": "/api/events",
+      "authRequired": true,
+      "roles": ["staff"],
+      "body": {
+        "title": "Community Yoga",
+        "description": "Morning session",
+        "location": "Town Hall",
+        "start_time": "2025-11-01T09:00:00Z",
+        "end_time": "2025-11-01T10:00:00Z",
+        "price_type": "FREE",
+        "price_cents": null,
+        "category": "MUSIC"
+      },
+      "responses": {
+        "201": { "event": { "id": 42 } },
+        "400": { "msg": "Bad request: missing required field" },
+        "401": { "msg": "Missing or invalid Authorization header" },
+        "403": { "msg": "Forbidden" }
+      }
+    },
+    {
+      "group": "Events (staff)",
+      "name": "Update Event",
+      "method": "PATCH",
+      "path": "/api/events/:id",
+      "authRequired": true,
+      "roles": ["staff"],
+      "params": [{ "name": "id", "type": "number" }],
+      "body": {
+        "title": "New title ",
+        "description": "New description "
+      },
+      "responses": {
+        "200": { "event": { "id": 42 } },
+        "401": { "msg": "Missing or invalid Authorization header" },
+        "403": { "msg": "Forbidden" },
+        "404": { "msg": "Event not found" }
+      }
+    },
+    {
+      "group": "Events (staff)",
+      "name": "Delete Event",
+      "method": "DELETE",
+      "path": "/api/events/:id",
+      "authRequired": true,
+      "roles": ["staff"],
+      "params": [{ "name": "id", "type": "number" }],
+      "responses": {
+        "204": {},
+        "401": { "msg": "Missing or invalid Authorization header" },
+        "403": { "msg": "Forbidden" },
+        "404": { "msg": "Event not found" }
+      }
+    },
+    {
+      "group": "Signups",
+      "name": "Create/Confirm Signup",
+      "method": "POST",
+      "path": "/api/events/:id/signups",
+      "authRequired": true,
+      "params": [{ "name": "id", "type": "number" }],
+      "body": {},
+      "responses": {
+        "201": { "signup": { "user_id": 2, "event_id": 1 } },
+        "401": { "msg": "Missing or invalid Authorization header" },
+        "404": { "msg": "Event not found" }
+      }
+    },
+    {
+      "group": "Signups",
+      "name": "List Signups for Event (staff)",
+      "method": "GET",
+      "path": "/api/events/:id/signups",
+      "authRequired": true,
+      "roles": ["staff"],
+      "params": [{ "name": "id", "type": "number" }],
+      "responses": {
+        "200": { "signups": [{ "user_id": 2, "event_id": 1, "created_at": "2025-10-15T12:00:00.000Z" }] },
+        "401": { "msg": "Missing or invalid Authorization header" }
+      }
+    },
+    {
+      "group": "Signups",
+      "name": "My Signups (IDs)",
+      "method": "GET",
+      "path": "/api/signups/me",
+      "authRequired": true,
+      "responses": {
+        "200": { "event_ids": [1, 5, 9] },
+        "401": { "msg": "Missing or invalid Authorization header" }
+      }
+    },
+    {
+      "group": "Google",
+      "name": "Google Connection Status",
+      "method": "GET",
+      "path": "/api/integrations/google/status",
+      "authRequired": true,
+      "responses": {
+        "200": { "connected": true }
+      }
+    },
+    {
+      "group": "Google",
+      "name": "Start Google OAuth",
+      "method": "GET",
+      "path": "/api/integrations/google/init",
+      "authRequired": true,
+      "query": [
+        { "name": "eventId", "type": "number", "required": false },
+        { "name": "next", "type": "string", "required": false, "desc": "Path to return to after consent (e.g. /events/11)" }
+      ],
+      "responses": {
+        "200": { "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?..." }
+      }
+    },
+    {
+      "group": "Google",
+      "name": "OAuth Callback",
+      "method": "GET",
+      "path": "/api/integrations/google/callback",
+      "authRequired": false,
+      "query": [
+        { "name": "code", "type": "string", "required": true },
+        { "name": "state", "type": "string", "required": true }
+      ],
+      "responses": {
+        "302": "Redirects back to FRONTEND_BASE_URL "
+      }
+    },
+    {
+      "group": "Google",
+      "name": "Add Event to Calendar",
+      "method": "POST",
+      "path": "/api/events/:id/calendar",
+      "authRequired": true,
+      "params": [{ "name": "id", "type": "number" }],
+      "responses": {
+        "201": {
+          "calendar": {
+            "id": "google-event-id",
+            "htmlLink": "https://www.google.com/calendar/event?eid=..."
+          }
+        },
+        "400": { "msg": "Google not connected" },
+        "404": { "msg": "Event not found" }
+      }
+    }
+  ],
+  "errors": [
+    { "status": 400, "msg": "Bad request: invalid parameter | missing required field" },
+    { "status": 401, "msg": "Missing or invalid Authorization header" },
+    { "status": 403, "msg": "Forbidden" },
+    { "status": 404, "msg": "Route not found | Event not found | Related resource not found" },
+    { "status": 409, "msg": "Conflict: resource already exists" },
+    { "status": 500, "msg": "Internal Server Error" }
+  ],
+  "notes": [
+    "Authenticated requests must set Authorization: Bearer <JWT>.",
+    "Staff-only endpoints require a user with is_staff=true.",
+    "List events supports ?include=counts to add signup_count per event.",
+    "Google OAuth requires GOOGLE_* envs and valid redirect URIs in Google Cloud Console."
+  ]
+}
